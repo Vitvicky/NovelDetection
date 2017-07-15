@@ -479,9 +479,9 @@ def novel_class_evaluation(sourceLabel,targetLabel,srcTarIndex,novel_class_singl
     print "sourceClass is: ",sourceClass
     account = 0.0
 
-    targetLeftIndex = srcTarIndex[2]
+    targetAdvanced = srcTarIndex[4]
     targetRightIndex = srcTarIndex[3]
-    eval_targetLabel = targetLabel[targetLeftIndex:targetRightIndex]
+    eval_targetLabel = targetLabel[targetRightIndex - targetAdvanced:targetRightIndex]
     targetClass = set()
     for i in eval_targetLabel:
         if i not in targetClass:
@@ -489,13 +489,15 @@ def novel_class_evaluation(sourceLabel,targetLabel,srcTarIndex,novel_class_singl
 
     print "targetClass is: ", targetClass
 
-
+    novel_class = set()
     for i in xrange(len(eval_targetLabel)):
-        #if targetLabel[i] != 1.0 and targetLabel[i] != 6.0 and targetLabel[i] != 7.0:
+        # if targetLabel[i] != 1.0 and targetLabel[i] != 6.0 and targetLabel[i] != 7.0:
         if eval_targetLabel[i] not in sourceClass:
-            account+=1
+            novel_class.add(eval_targetLabel[i])
+            account += 1
 
-    print "In target data, number of real novel class is: ",account
+    print "In target data, number of real novel class is: ", account
+    print "novel class set", novel_class
     #return account,sourceClass
 
     #evaluating the detect result
@@ -538,10 +540,10 @@ if __name__ == '__main__':
     dataName = "Syndata_002"
     #rate = 0.3
     k = 5
-    q = 15
-    buffer_size = 90
+    q = 5
+    buffer_size = 100
     novelClassList = []
-    clusterMethod = "kmeans"
+    clusterMethod = "kmeansBeta"
     index = 0
     d = 10
     #windowSize = 900
