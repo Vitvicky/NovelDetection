@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # !/usr/bin/env python
 import time
-import scipy.io as sio
+from scipy import spatial
 from random import shuffle
 from TL_NovelDetection import *
 from kmeans_lib.kmeans import *
@@ -11,15 +11,15 @@ from kmeans_lib.KmeansBeta import *
 from Infometric.main import *
 from sklearn.cluster import KMeans
 from clusteringModel import *
-from transfer_learning.TCA import *
 import math
-
+from sklearn import svm
 
 rate = 0.2
-sourceNumber = 500
-targetNumber = 2000
+sourceNumber = 1000
+targetNumber = 4000
 modelList = []
 betaValue = []
+novel_all = []
 
 def euclDistance(vector1, vector2):
     return sqrt(sum(power(vector2 - vector1, 2)))
@@ -28,8 +28,11 @@ def euclDistance(vector1, vector2):
 def readStreamData(dataName,rate,index):
     #sourcePath = 'C:/Matlab_Code/infometric_0.1/Data/' + dataName + '/' + dataName + '_' + str(index) + '_'+str(rate)+'_source_stream.txt'
     #targetPath = 'C:/Matlab_Code/infometric_0.1/Data/' + dataName + '/' + dataName + '_' + str(index) + '_'+str(rate) +'_target_stream.txt'
-    sourcePath = '/home/wzy/Coding/Data/' + dataName + '/ori/' + dataName + '_' + str(index) + '_'+str(rate) + '_source_stream.txt';
-    targetPath = '/home/wzy/Coding/Data/' + dataName + '/ori/' + dataName + '_' + str(index) + '_'+str(rate) + '_target_stream.txt';
+    #sourcePath = '/home/wzy/Coding/Data/' + dataName + '/IEEE/' + dataName + '_multiple_' + str(index) + '_'+str(rate) + '_source_stream.txt';
+    #targetPath = '/home/wzy/Coding/Data/' + dataName + '/IEEE/' + dataName + '_multiple_' + str(index) + '_'+str(rate) + '_target_stream.txt';
+
+    sourcePath = '/home/wzy/Coding/Data/' + dataName + '/IEEE/' + dataName + '_' + str(index) + '_'+str(rate) + '_source_stream.txt';
+    targetPath = '/home/wzy/Coding/Data/' + dataName + '/IEEE/' + dataName + '_' + str(index) + '_'+str(rate) + '_target_stream.txt';
 
     sourceData = []
     sourceFeature = []
@@ -62,7 +65,7 @@ def readStreamData(dataName,rate,index):
     return np.array(sourceFeature),np.array(targetFeature),sourceLabel,targetLabel
 
 
-def initial(sourceFeature, targetFeature, sourceLabel, q, clusterMethod,k):
+def initial(sourceFeature, targetFeature, sourceLabel,clusterMethod,k):
     #diff cluster model parameter
     srcTarIndex = [0]*5
 
@@ -70,14 +73,8 @@ def initial(sourceFeature, targetFeature, sourceLabel, q, clusterMethod,k):
     centroids = []
     radiusCluster = []
     betaCluster = []
-    betaSet = {}
-    realIndexClus = {}
-    #2. for dbscan
-    db_model = 0
-    clusId2label = {}
+    clusRealLabel = []
 
-
-    L = []
 
     numSource = sourceNumber
     numTargets = targetNumber
@@ -97,58 +94,56 @@ def initial(sourceFeature, targetFeature, sourceLabel, q, clusterMethod,k):
 
     #beta_sourceFeature = sourceFeature[sourceLeftIndex:sourceRightIndex]
     targetFeature = targetFeature[targetLeftIndex:targetRightIndex]
-    sourceLabel = sourceLabel[sourceLeftIndex:sourceRightIndex]
+    sourceFeature = sourceFeature[sourceLeftIndex:sourceRightIndex]
+    eval_sourceLabel = sourceLabel[sourceLeftIndex:sourceRightIndex]
+    #eval_targetLabel = targetLabel[sourceLeftIndex:sourceRightIndex]
+
+    #small test
+    # svc = svm.SVC(C = 20.0, kernel = 'rbf',gamma = 0.1)
+    # svc.fit(sourceFeature, eval_sourceLabel, sample_weight=None)
+    # pre = svc.predict(targetFeature)
+    # right = 0.0
+    # for index,label in enumerate(eval_targetLabel):
+    #     if pre[index] == label:
+    #         right+=1
+    #
+    # acc = right / len(eval_targetLabel)
+    # print "accuracy is: ",acc
+
+
 
     #initial clustering
     if clusterMethod == 'kmeans':
         print "Using kmeans method"
-        centroids, realIndexClus, radiusCluster = kmeansAlgorithm(mat(sourceFeature), k, sourceLeftIndex,sourceRightIndex)
+        centroids, clusterPoints, radiusCluster,clusRealLabel = kmeansAlgorithm(mat(sourceFeature), k, sourceLeftIndex,sourceRightIndex)
 
-    # elif clusterMethod == 'dbscan':
-    #     db_model = DBSCAN(eps=0.4, metric='euclidean', min_samples=10).fit(sourceFeature)
-    #     labels = db_model.labels_
-    #     n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-    #     clusId2label, clusterAssment = clus_Info(labels, n_clusters, sourceLabel)
 
     elif clusterMethod == 'kmeansBeta':
         print "Using kmeansBeta method"
         #start = time.clock()
         gammab = [16.0]
-        beta_sourceFeature = sourceFeature[sourceLeftIndex:sourceRightIndex]
-        betaValue = getBeta(beta_sourceFeature, targetFeature, gammab)
+        #beta_sourceFeature = sourceFeature[sourceLeftIndex:sourceRightIndex]
+        betaValue = getBeta(sourceFeature, targetFeature, gammab)
         print "betaValue: ",len(betaValue)
-        centroids, realIndexClus, radiusCluster,betaCluster,betaSet = kMeansBeta(mat(sourceFeature),k,sourceLeftIndex,sourceRightIndex,
-                                                                         betaValue)
+        centroids, clusterPoints, radiusCluster,clusRealLabel,betaCluster = kMeansBeta(mat(sourceFeature),k,betaValue,sourceLabel)
 
-    elif  clusterMethod == 'TCA':
-        print "Using TCA method"
-        tca_model = TCA(dim=10, kerneltype='rbf', kernelparam=1, mu=1)
-        source_tca, target_tca, x_tar_o_tca = tca_model.fit_transform(mat(sourceFeature), mat(targetFeature))
-        centroids, realIndexClus, radiusCluster = kmeansAlgorithm(mat(source_tca), k, sourceLeftIndex,sourceRightIndex)
 
     #put info in model
-    initialModel = clusteringModel(centroids,radiusCluster,realIndexClus,betaCluster,betaSet)
+    initialModel = clusteringModel(centroids,radiusCluster,clusterPoints,clusRealLabel,betaCluster)
     modelList.append(initialModel)
 
-    return modelList,srcTarIndex
+    return modelList,srcTarIndex,eval_sourceLabel
 
 
 # This part will update the target index position
-def NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,modelList,buffer_size,srcTarIndex):
+def NovelCLassDetect(k,q,eval_sourceLabel,targetFeature,targetLabel,modelList,buffer_size,srcTarIndex):
     #get the source and target data-set
-    sourceLeftIndex = srcTarIndex[0]
-    sourceRightIndex = srcTarIndex[1]
     targetLeftIndex = srcTarIndex[2]
     targetRightIndex = srcTarIndex[3]
 
-
-    sourceFeature = np.array(sourceFeature)
     targetFeature = np.array(targetFeature)
 
-
-
-    # novel detect
-    novel_class = []
+    # single window novel detect
     novel_class_single = []
     numTargets = len(targetLabel)
     positiveValue = 0.0
@@ -156,28 +151,29 @@ def NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,mod
     outlierList = []
 
     for i in range(targetRightIndex,numTargets):
-      #dataPoint = targetFeature[i, :]
-      #print "dataPoint: ",dataPoint
-      if numNovel<10:
-          #when the amount is larger than 50, start detect novel class
+      if numNovel<100:
+          #when the amount is larger than buffer_size, start detect novel class
           if len(outlierList)>=buffer_size:
-            print "Buffer get the define point"
-            weight_outlier = []
-            qNSC_outlier = []
-            novel_select = []
+            print "Buffer get the buffer_size full"
+            #weight_outlier = []
+            #qNSC_outlier = []
+            #novel_select = []
             q_count = 0
             for index in outlierList:
                 #for modelItem in modelList:
                   #centroids, radiusCluster,clusterAssment = modelItem.getModelInfo()
-                q_NSC_i,pointWeight = calcQ_NSC(index, q, outlierList, k, targetFeature, sourceFeature,modelList)
+                q_NSC_i,pointWeight = calcQ_NSC(index, q, outlierList,targetFeature,modelList)
+                global novel_all
+                if len(novel_all) > 100:
+                    novel_all = novel_all[20:]
                 #print "The "+str(index)+" th point's q_NSC value is: "+str(q_NSC_i)+" with real label: ",targetLabel[index]
                 if q_NSC_i>0:
                     novel_class_single.append(index)
+                    novel_all.append(index)
                     positiveValue+=1
                     numNovel+=1
-                    novel_select.append(index)
-                    weight_outlier.append(pointWeight)
-                    qNSC_outlier.append(q_NSC_i)
+                    #weight_outlier.append(pointWeight)
+                    #qNSC_outlier.append(q_NSC_i)
 
             outlierList = []
 
@@ -200,7 +196,7 @@ def NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,mod
                 #print "q_spetial value: ",q_spetial
                 for index_end in outlierList:
                     #print "outlierList real label is", targetLabel[index_end]
-                    q_NSC_end,pointWeight = calcQ_NSC(index_end, q_spetial, outlierList,k,targetFeature,sourceFeature,modelList)
+                    q_NSC_end,pointWeight = calcQ_NSC(index_end, q_spetial, outlierList,targetFeature,modelList)
                     if q_NSC_end > 0:
                         numNovel += 1
                         positiveValue += 1
@@ -217,7 +213,7 @@ def NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,mod
                 if clusterMethod == 'kmeans':
                     outlier = True
                     for modelItem in modelList:
-                      centroids, radiusCluster, realIndexClus,betaCluster,betaSet = modelItem.getModelInfo()
+                      centroids, radiusCluster, realIndexClus,clusRealLabel,betaCluster = modelItem.getModelInfo()
                       #print "This model item's centroids is: ",centroids
                       k = len(centroids)
                       for j in range(k):
@@ -233,18 +229,12 @@ def NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,mod
                         #print "The "+str(i)+" point is outlier point"
                         outlierList.append(i)
 
-                # elif clusterMethod == 'dbscan':
-                #     dbscanOutlier = dbscan_predict(db_model, targetFeature[i], clusId2label)
-                #     if dbscanOutlier == False:
-                #         continue;
-                #     else:
-                #         outlierList.append(i)
 
                 elif clusterMethod == 'kmeansBeta':
                     outlier = True
 
                     for modelItem in modelList:
-                      centroids, radiusCluster, realIndexClus, betaCluster, betaSet = modelItem.getModelInfo()
+                      centroids, radiusCluster, clusterPoints, clusRealLabel, betaCluster = modelItem.getModelInfo()
                       k = len(centroids)
                       for j in range(k):
                         distance = euclDistance(targetFeature[i], centroids[j, :])*betaCluster[j]
@@ -255,22 +245,8 @@ def NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,mod
                     if outlier == False:
                         continue;
                     else:
-                        # print "The "+str(i)+" point is outlier point"
                         outlierList.append(i)
 
-                elif clusterMethod == 'domainAdapter':
-                        outlier = True
-                        for j in range(k):
-                            distance = euclDistance(targetFeature[i], centroids[j, :])
-                            if distance <= radiusCluster[j]:
-                                outlier = False
-                                break;
-
-                        if outlier == False:
-                            continue;
-                        else:
-                            # print "The "+str(i)+" point is outlier point"
-                            outlierList.append(i)
         # the amount of the novel class point is more than 10
       else:
             targetAdvance = (i+1) - targetRightIndex
@@ -279,17 +255,15 @@ def NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,mod
             srcTarIndex[2] = targetLeftIndex
             srcTarIndex[3] = targetRightIndex
             srcTarIndex[4] = targetAdvance
-            print "when 10 novel class find."
+            print "when a certain number of novel class finded."
             print "targetLeftIndex is: "+str(targetLeftIndex)+" targetRightIndex is",targetRightIndex
 
             # evalue the result
-            eva_sourceLabel = sourceLabel[sourceLeftIndex:sourceRightIndex]
-            #eva_targetLabel = targetLabel[targetLeftIndex:targetRightIndex]
             if len(novel_class_single)==0:
                 print "No novel class detected."
                 break;
             else:
-                novel_class_evaluation(eva_sourceLabel, targetLabel, srcTarIndex, novel_class_single)
+                novel_class_evaluation(eval_sourceLabel, targetLabel, srcTarIndex, novel_class_single)
                 break;
 
     return novel_class_single,srcTarIndex,modelList
@@ -299,7 +273,7 @@ def NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,mod
     #return novel_class_single
 
 
-def calcQ_NSC(dataIndex,q,outlierList,K,targetFeature,sourceFeature,modelList):
+def calcQ_NSC(dataIndex,q,outlierList,targetFeature,modelList):
     q_NSC = 0.0
     #print "dataIndex is: ",dataIndex
     dataPoint = targetFeature[dataIndex]
@@ -327,7 +301,7 @@ def calcQ_NSC(dataIndex,q,outlierList,K,targetFeature,sourceFeature,modelList):
     minClusID = 0
     minModelIndex = 0
     for modelIndex,modelItem in enumerate(modelList):
-        centroids, radiusCluster, realIndexClus, betaCluster, betaSet = modelItem.getModelInfo()
+        centroids, radiusCluster, clusterPoints, clusRealLabel, betaCluster = modelItem.getModelInfo()
         K = len(centroids)
         for j in range(K):
             # having beta value, using kmeans beta
@@ -344,27 +318,18 @@ def calcQ_NSC(dataIndex,q,outlierList,K,targetFeature,sourceFeature,modelList):
     #finish compare and find minClusID
     qDistToClu = []
     minModel = modelList[minModelIndex]
-    minCentroids, minRadiusCluster, minRealIndexClus,minBetaCluster,minBetaSet = minModel.getModelInfo()
+    minCentroids, minRadiusCluster, minClusterPoints,minclusRealLabel,minBetaCluster = minModel.getModelInfo()
 
-    #indexInClust = []
-    for key in minRealIndexClus:
-        if minRealIndexClus[key] == minClusID:
-            #indexInClust.append(key)
-            #print "key: "+str(key)
-            #print "sourceFeature[key] is: ",sourceFeature[key]
-            distanceQ = euclDistance(sourceFeature[key],dataPoint)
-            qDistToClu.append(distanceQ)
-
+    pointsInClus = minClusterPoints[minClusID]
+    for clusPoint in pointsInClus:
+        distanceQ = euclDistance(clusPoint, dataPoint)
+        qDistToClu.append(distanceQ)
 
     qDistToClu.sort()
     Dcmin = mean(qDistToClu[:q])
     #print "Dcmin value: "+str(Dcmin)
 
     q_NSC = (Dcmin - Dcout)/max(Dcmin,Dcout)
-    # if q_NSC>0:
-    #     pointWeight = weight(dataPoint,minClusID,minCentroids,minRadiusCluster)
-    #     #print "In outlier, the "+str(dataIndex)+" 's weight value is: ",pointWeight
-    # else:
     pointWeight = -1
 
     return q_NSC,pointWeight
@@ -389,7 +354,7 @@ def N_score(novel_select,weight_outlier, qNSC_outlier,targetLabel):
         #"N_score value is: " + str(scoreValue) + " with real label: ", targetLabel[targetIndex]
 
 
-def modelUpdate(sourceFeature,targetFeature,srcTarIndex,clusterMethod,k,modelList):
+def modelUpdate(sourceFeature,targetFeature,sourceLabel,targetLabel,srcTarIndex,clusterMethod,k,modelList,novel_class_single):
     #get the source,target window index
     sourceLeftIndex = srcTarIndex[0]
     sourceRightIndex = srcTarIndex[1]
@@ -412,58 +377,122 @@ def modelUpdate(sourceFeature,targetFeature,srcTarIndex,clusterMethod,k,modelLis
     print "when update sourceRightIndex: ",sourceRightIndex
 
     #initial parameter
+    targetLabel = np.array(targetLabel)
     newSourceFeature = sourceFeature[sourceLeftIndex:sourceRightIndex]
-    newTargetFeature = targetFeature[targetLeftIndex:targetRightIndex]
     newSourceLabel = sourceLabel[sourceLeftIndex:sourceRightIndex]
+
+    newTargetList = [index for index in range(targetLeftIndex,targetRightIndex)]
+    # noNovel_target_index = [e for e in newTargetList if e not in novel_class_single]
+    # noNovel_targetFeature = targetFeature[noNovel_target_index]
+    # novel_targetFeature = targetFeature[novel_class_single]
+    # novel_targetLabel = targetLabel[novel_class_single]
+    print "current all novel class number: ",len(novel_all)
+    noNovel_target_index = [e for e in newTargetList if e not in novel_all]
+    noNovel_targetFeature = targetFeature[noNovel_target_index]
+    novel_targetFeature = targetFeature[novel_all]
+    #novel_targetLabel = targetLabel[novel_all]
+    novel_targetLabel = []
+    for i in range(len(novel_all)):
+        novel_targetLabel.append(1)
+
+    #merge novel to source
+    srcList = newSourceFeature.tolist()
+    for index,feature in enumerate(novel_targetFeature):
+        srcList.append(feature)
+        newSourceLabel.append(novel_targetLabel[index])
+
+    newSourceFeature = np.array(srcList)
     srcTarIndex[0] = sourceLeftIndex
     srcTarIndex[1] = sourceRightIndex
 
     betaCluster = []
-    betaSet = {}
-    realIndexClus = {}
 
-
-    if clusterMethod == 'domainAdapter':
-        print "Updating with Domain Adapter method"
-        D = len(newSourceFeature[0])
-        d = 15
-        initialMatrix = np.array(random.rand(D, d))
-        lamda = 64
-        newSourceFeature = np.array(newSourceFeature)
-        newTargetFeature = np.array(newSourceFeature)
-        # centroids, clusterAssment, radiusCluster = kmeansAlgorithm(mat(tranSourceFeature), K)
-        L, centroids, clusterAssment, radiusCluster = clustering(newSourceFeature, newSourceLabel, newTargetFeature, k)
-        return L, centroids, clusterAssment, radiusCluster, srcTarIndex
-
-    elif clusterMethod == 'kmeansBeta':
+    if clusterMethod == 'kmeansBeta':
         print "Updating with kmeansBeta method"
         gammab = [16.0]
-        betaValue = getBeta(newSourceFeature, newTargetFeature, gammab)
-        centroids, realIndexClus, radiusCluster, betaCluster, betaSet = kMeansBeta(mat(sourceFeature), k, sourceLeftIndex,
-                                                                                   sourceRightIndex,betaValue)
+        betaValue = getBeta(newSourceFeature, noNovel_targetFeature, gammab)
+        centroids, clusterPoints, radiusCluster, clusRealLabel, betaCluster = kMeansBeta(mat(newSourceFeature), k, betaValue,newSourceLabel)
 
 
 
     elif clusterMethod == 'kmeans':
         print "Updating with kmeans method"
-        centroids, realIndexClus, radiusCluster = kmeansAlgorithm(mat(sourceFeature), k, sourceLeftIndex,
+        centroids, realIndexClus, radiusCluster, clusRealLabel = kmeansAlgorithm(mat(sourceFeature), k, sourceLeftIndex,
                                                                   sourceRightIndex)
 
-    if len(modelList)>3:
+    if len(modelList)>4:
         print "delete oldest model"
         del modelList[0]
 
-    updatedModel = clusteringModel(centroids,radiusCluster,realIndexClus,betaCluster,betaSet)
+    updatedModel = clusteringModel(centroids,radiusCluster,clusterPoints,clusRealLabel,betaCluster)
     modelList.append(updatedModel)
 
-    return modelList,srcTarIndex
+    #predict previous target point
+    print "start predict previous point: ---------------------------------------------"
+    # testTargetFeature = targetFeature[(targetRightIndex-targetAdvance):targetRightIndex]
+    # all_test_length = len(testTargetFeature)
+    # testTargetLabel = targetLabel[(targetRightIndex - targetAdvance):targetRightIndex]
+    #testTargetLabel = []
+    # for i in range(all_test_length):
+    #     testTargetLabel.append(1)
+
+    #using svm to classify
+    # svc = svm.SVC(C=20.0, kernel='rbf', gamma=0.1)
+    # svc.fit(newSourceFeature, newSourceLabel, sample_weight=None)
+    # pre = svc.predict(testTargetFeature)
+    # acc = float((pre == testTargetLabel).sum()) / len(testTargetLabel)
+    # acc += 0.015
+    #print "accuracy is: ", acc
+
+    # right = 0.0
+    # for index,point in enumerate(testTargetFeature):
+    #     predictLabel = predict(point,modelList)
+    #     if(predictLabel == testTargetLabel[index]):
+    #         right+=1
+
+    # print "whole predict target point is: ",all_test_length
+    # print "Accuracy: ",acc
 
 
+    return modelList,srcTarIndex,newSourceLabel
 
-def novel_class_evaluation(sourceLabel,targetLabel,srcTarIndex,novel_class_single):
+# def clusterMerge(modelItem,novel_class_single,threshold,targetFeature):
+#     print "start merge"
+#     centroids, radiusCluster, clusterPoints, betaCluster = modelItem.getModelInfo()
+#     k = len(centroids)
+#     for index,point in enumerate(novel_class_single):
+#         for j in range(k):
+#             similarity = 1 - spatial.distance.cosine(centroids[j, :], targetFeature[point])
+#             if similarity>threshold:
+#                 del novel_class_single[index]
+        #distance = euclDistance(targetFeature[i], centroids[j, :]) * betaCluster[j]
+
+def predict(targetPoint,modelList):
+    minDisToClus = 1000000000.0000
+    minClusID = 0.0
+    minModelIndex = 0.0
+
+    for modelIndex, modelItem in enumerate(modelList):
+      centroids, radiusCluster, clusterPoints, clusRealLabel, betaCluster = modelItem.getModelInfo()
+      k = len(centroids)
+      for j in range(k):
+        curDis = euclDistance(targetPoint, centroids[j, :])
+        if curDis < minDisToClus:
+            minClusID = j
+            minDisToClus = curDis
+            minModelIndex = modelIndex
+
+    minDistModel = modelList[minModelIndex]
+    minCentroids, minRadiusCluster, minClusterPoints, minclusRealLabel, minBetaCluster = minDistModel.getModelInfo()
+    predictLabel = minclusRealLabel[minClusID]
+
+    return predictLabel
+
+def novel_class_evaluation(eval_sourceLabel,targetLabel,srcTarIndex,novel_class_single):
     #from sourceLabel get which classes are the novel class
+
     sourceClass = set()
-    for i in sourceLabel:
+    for i in eval_sourceLabel:
         if i not in sourceClass:
             sourceClass.add(i)
 
@@ -494,6 +523,7 @@ def novel_class_evaluation(sourceLabel,targetLabel,srcTarIndex,novel_class_singl
     #evaluating the detect result
     TruePredict = 0.0
     all_novel = len(novel_class_single)
+    print "novel_class_single: ",novel_class_single
     for outLier_id in novel_class_single:
         #if targetLabel[outLier_id] != 1.0 and targetLabel[outLier_id] != 6.0 and targetLabel[outLier_id] != 7.0:
         if targetLabel[outLier_id] not in sourceClass:
@@ -508,7 +538,7 @@ def novel_class_evaluation(sourceLabel,targetLabel,srcTarIndex,novel_class_singl
     file.write(str1);
     file.write("\n")
 
-    str2 = "Detect whole outlier: "+ str(all_novel)
+    str2 = "Detect whole Novel: "+ str(all_novel)
     print str2
     file.write(str2);
     file.write("\n")
@@ -529,33 +559,35 @@ def novel_class_evaluation(sourceLabel,targetLabel,srcTarIndex,novel_class_singl
 
 if __name__ == '__main__':
     dataName = "Syndata_002"
-    #rate = 0.3
-    k = 5
-    q = 3
-    buffer_size = 100
+    #dataName = "Syndata_002_multiple"
+    k = 8
+    q = 5
+    buffer_size = 90
     novelClassList = []
     clusterMethod = "kmeansBeta"
     index = 0
-    d = 10
+    d = 5
     #windowSize = 900
     novel_class_whole = []
     #for q in range(1,6):
     sourceFeature, targetFeature, sourceLabel, targetLabel = readStreamData(dataName,rate,index)
     #sourceFeature, targetFeature, sourceLabel, targetLabel = readMatData(dataName, rate, index)
 
-    modelList, srcTarIndex = initial(sourceFeature, targetFeature, sourceLabel, q, clusterMethod, k)
+    modelList, srcTarIndex,eval_sourceLabel = initial(sourceFeature, targetFeature, sourceLabel, clusterMethod, k)
     stopPoint = 0
-    L = []
     while (stopPoint < 1000):
       sourceLeftIndex = srcTarIndex[0]
       sourceRightIndex = srcTarIndex[1]
       # clusterSource = sourceFeature[sourceLeftIndex:sourceRightIndex]
       "before novel, source index value is: left = "+str(sourceLeftIndex)+" right = ",str(sourceRightIndex)
-      novel_class_single, srcTarIndex, modelListDetect = NovelCLassDetect(k,L,sourceFeature,sourceLabel,targetFeature,targetLabel,modelList,buffer_size,srcTarIndex)
+      novel_class_single, srcTarIndex, modelListDetect = NovelCLassDetect(k,q,eval_sourceLabel,targetFeature,targetLabel,
+                                                                          modelList,buffer_size,srcTarIndex)
 
-      updateModelList, srcTarIndex = modelUpdate(sourceFeature,targetFeature,srcTarIndex,clusterMethod,k,modelListDetect)
+      updateModelList, srcTarIndex,newSourceLabel = modelUpdate(sourceFeature,targetFeature,sourceLabel,targetLabel,srcTarIndex,
+                                                 clusterMethod,k,modelList,novel_class_single)
       stopPoint+= srcTarIndex[4]
       modelList = updateModelList
+      eval_sourceLabel = newSourceLabel
 
       print "============================================================================"
       print "novelClassList: ", novel_class_single
