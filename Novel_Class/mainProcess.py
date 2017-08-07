@@ -570,7 +570,7 @@ if __name__ == '__main__':
 
     modelList, srcTarIndex,eval_sourceLabel = initial(sourceFeature, targetFeature, sourceLabel, clusterMethod, k)
     stopPoint = 0
-    while (stopPoint < 1000):
+    while (stopPoint < 100000):
       sourceLeftIndex = srcTarIndex[0]
       sourceRightIndex = srcTarIndex[1]
       # clusterSource = sourceFeature[sourceLeftIndex:sourceRightIndex]
