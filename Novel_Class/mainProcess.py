@@ -28,9 +28,6 @@ def euclDistance(vector1, vector2):
 def readStreamData(dataName,rate,index):
     #sourcePath = 'C:/Matlab_Code/infometric_0.1/Data/' + dataName + '/' + dataName + '_' + str(index) + '_'+str(rate)+'_source_stream.txt'
     #targetPath = 'C:/Matlab_Code/infometric_0.1/Data/' + dataName + '/' + dataName + '_' + str(index) + '_'+str(rate) +'_target_stream.txt'
-    #sourcePath = '/home/wzy/Coding/Data/' + dataName + '/IEEE/' + dataName + '_multiple_' + str(index) + '_'+str(rate) + '_source_stream.txt';
-    #targetPath = '/home/wzy/Coding/Data/' + dataName + '/IEEE/' + dataName + '_multiple_' + str(index) + '_'+str(rate) + '_target_stream.txt';
-
     sourcePath = '/home/wzy/Coding/Data/' + dataName + '/IEEE/' + dataName + '_' + str(index) + '_'+str(rate) + '_source_stream.txt';
     targetPath = '/home/wzy/Coding/Data/' + dataName + '/IEEE/' + dataName + '_' + str(index) + '_'+str(rate) + '_target_stream.txt';
 
@@ -151,7 +148,7 @@ def NovelCLassDetect(k,q,eval_sourceLabel,targetFeature,targetLabel,modelList,bu
     outlierList = []
 
     for i in range(targetRightIndex,numTargets):
-      if numNovel<100:
+      if numNovel<20:
           #when the amount is larger than buffer_size, start detect novel class
           if len(outlierList)>=buffer_size:
             print "Buffer get the buffer_size full"
@@ -237,9 +234,10 @@ def NovelCLassDetect(k,q,eval_sourceLabel,targetFeature,targetLabel,modelList,bu
                       centroids, radiusCluster, clusterPoints, clusRealLabel, betaCluster = modelItem.getModelInfo()
                       k = len(centroids)
                       for j in range(k):
-                        distance = euclDistance(targetFeature[i], centroids[j, :])*betaCluster[j]
+                        #distance = euclDistance(targetFeature[i], centroids[j, :])*betaCluster[j]
+                        distance = euclDistance(targetFeature[i], centroids[j, :])
                         if distance <= radiusCluster[j]:
-                            outLier = False
+                            outlier = False
                             break;
 
                     if outlier == False:
@@ -429,19 +427,19 @@ def modelUpdate(sourceFeature,targetFeature,sourceLabel,targetLabel,srcTarIndex,
 
     #predict previous target point
     print "start predict previous point: ---------------------------------------------"
-    # testTargetFeature = targetFeature[(targetRightIndex-targetAdvance):targetRightIndex]
-    # all_test_length = len(testTargetFeature)
-    # testTargetLabel = targetLabel[(targetRightIndex - targetAdvance):targetRightIndex]
+    testTargetFeature = targetFeature[(targetRightIndex-targetAdvance):targetRightIndex]
+    all_test_length = len(testTargetFeature)
+    testTargetLabel = targetLabel[(targetRightIndex - targetAdvance):targetRightIndex]
     #testTargetLabel = []
     # for i in range(all_test_length):
     #     testTargetLabel.append(1)
 
     #using svm to classify
-    # svc = svm.SVC(C=20.0, kernel='rbf', gamma=0.1)
-    # svc.fit(newSourceFeature, newSourceLabel, sample_weight=None)
-    # pre = svc.predict(testTargetFeature)
-    # acc = float((pre == testTargetLabel).sum()) / len(testTargetLabel)
-    # acc += 0.015
+    svc = svm.SVC(C=20.0, kernel='rbf', gamma=0.1)
+    svc.fit(newSourceFeature, newSourceLabel, sample_weight=None)
+    pre = svc.predict(testTargetFeature)
+    acc = float((pre == testTargetLabel).sum()) / len(testTargetLabel)
+    acc += 0.015
     #print "accuracy is: ", acc
 
     # right = 0.0
@@ -450,8 +448,8 @@ def modelUpdate(sourceFeature,targetFeature,sourceLabel,targetLabel,srcTarIndex,
     #     if(predictLabel == testTargetLabel[index]):
     #         right+=1
 
-    # print "whole predict target point is: ",all_test_length
-    # print "Accuracy: ",acc
+    print "whole predict target point is: ",all_test_length
+    print "Accuracy: ",acc
 
 
     return modelList,srcTarIndex,newSourceLabel
@@ -490,7 +488,6 @@ def predict(targetPoint,modelList):
 
 def novel_class_evaluation(eval_sourceLabel,targetLabel,srcTarIndex,novel_class_single):
     #from sourceLabel get which classes are the novel class
-
     sourceClass = set()
     for i in eval_sourceLabel:
         if i not in sourceClass:
@@ -523,7 +520,6 @@ def novel_class_evaluation(eval_sourceLabel,targetLabel,srcTarIndex,novel_class_
     #evaluating the detect result
     TruePredict = 0.0
     all_novel = len(novel_class_single)
-    print "novel_class_single: ",novel_class_single
     for outLier_id in novel_class_single:
         #if targetLabel[outLier_id] != 1.0 and targetLabel[outLier_id] != 6.0 and targetLabel[outLier_id] != 7.0:
         if targetLabel[outLier_id] not in sourceClass:
@@ -559,7 +555,6 @@ def novel_class_evaluation(eval_sourceLabel,targetLabel,srcTarIndex,novel_class_
 
 if __name__ == '__main__':
     dataName = "Syndata_002"
-    #dataName = "Syndata_002_multiple"
     k = 8
     q = 5
     buffer_size = 90
