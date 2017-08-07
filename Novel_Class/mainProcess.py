@@ -439,7 +439,6 @@ def modelUpdate(sourceFeature,targetFeature,sourceLabel,targetLabel,srcTarIndex,
     svc.fit(newSourceFeature, newSourceLabel, sample_weight=None)
     pre = svc.predict(testTargetFeature)
     acc = float((pre == testTargetLabel).sum()) / len(testTargetLabel)
-    acc += 0.015
     #print "accuracy is: ", acc
 
     # right = 0.0
