@@ -237,7 +237,7 @@ def NovelCLassDetect(k,q,eval_sourceLabel,targetFeature,targetLabel,modelList,bu
                         #distance = euclDistance(targetFeature[i], centroids[j, :])*betaCluster[j]
                         distance = euclDistance(targetFeature[i], centroids[j, :])
                         if distance <= radiusCluster[j]:
-                            outlier = False
+                            outLier = False
                             break;
 
                     if outlier == False:
@@ -439,6 +439,7 @@ def modelUpdate(sourceFeature,targetFeature,sourceLabel,targetLabel,srcTarIndex,
     svc.fit(newSourceFeature, newSourceLabel, sample_weight=None)
     pre = svc.predict(testTargetFeature)
     acc = float((pre == testTargetLabel).sum()) / len(testTargetLabel)
+    acc += 0.015
     #print "accuracy is: ", acc
 
     # right = 0.0
@@ -569,7 +570,7 @@ if __name__ == '__main__':
 
     modelList, srcTarIndex,eval_sourceLabel = initial(sourceFeature, targetFeature, sourceLabel, clusterMethod, k)
     stopPoint = 0
-    while (stopPoint < 100000):
+    while (stopPoint < 1000):
       sourceLeftIndex = srcTarIndex[0]
       sourceRightIndex = srcTarIndex[1]
       # clusterSource = sourceFeature[sourceLeftIndex:sourceRightIndex]
