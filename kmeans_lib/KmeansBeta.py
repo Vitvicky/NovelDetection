@@ -241,7 +241,7 @@ def clusLabel(indexInClust,sourceLabel):
 
     return clusAssignLabel
 
-def kMeansBeta(dataSet, k, betaValue, sourceLabel,distMeas=calcDist, createCent=initCentroids):
+def kMeansBeta(dataSet, k, betaValue,distMeas=calcDist, createCent=initCentroids):
 
     m = shape(dataSet)[0]
     #m = end - start
@@ -298,11 +298,8 @@ def kMeansBeta(dataSet, k, betaValue, sourceLabel,distMeas=calcDist, createCent=
 
     print "========================================================================================================="
     #assign real label
-    for j in range(k):
-        indexInClust = nonzero(clusterAssment[:, 0].A == j)[0]
-        clusRealLabel[j] = clusLabel(indexInClust, sourceLabel)
 
-    return centroids,clusterPoints,radiusCluster,clusRealLabel,betaCluster
+    return centroids,clusterPoints,radiusCluster,betaCluster
     #return centroids, clusterAssment, radiusCluster
 
 
