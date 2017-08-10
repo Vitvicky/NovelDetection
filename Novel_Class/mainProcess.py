@@ -70,7 +70,7 @@ def initial(sourceFeature, targetFeature, sourceLabel,clusterMethod,k):
     centroids = []
     radiusCluster = []
     betaCluster = []
-    clusRealLabel = []
+    
 
 
     numSource = sourceNumber
@@ -95,24 +95,11 @@ def initial(sourceFeature, targetFeature, sourceLabel,clusterMethod,k):
     eval_sourceLabel = sourceLabel[sourceLeftIndex:sourceRightIndex]
     #eval_targetLabel = targetLabel[sourceLeftIndex:sourceRightIndex]
 
-    #small test
-    # svc = svm.SVC(C = 20.0, kernel = 'rbf',gamma = 0.1)
-    # svc.fit(sourceFeature, eval_sourceLabel, sample_weight=None)
-    # pre = svc.predict(targetFeature)
-    # right = 0.0
-    # for index,label in enumerate(eval_targetLabel):
-    #     if pre[index] == label:
-    #         right+=1
-    #
-    # acc = right / len(eval_targetLabel)
-    # print "accuracy is: ",acc
-
-
-
+   
     #initial clustering
     if clusterMethod == 'kmeans':
         print "Using kmeans method"
-        centroids, clusterPoints, radiusCluster,clusRealLabel = kmeansAlgorithm(mat(sourceFeature), k, sourceLeftIndex,sourceRightIndex)
+        centroids, clusterPoints, radiusCluster = kmeansAlgorithm(mat(sourceFeature), k, sourceLeftIndex,sourceRightIndex)
 
 
     elif clusterMethod == 'kmeansBeta':
@@ -122,11 +109,11 @@ def initial(sourceFeature, targetFeature, sourceLabel,clusterMethod,k):
         #beta_sourceFeature = sourceFeature[sourceLeftIndex:sourceRightIndex]
         betaValue = getBeta(sourceFeature, targetFeature, gammab)
         print "betaValue: ",len(betaValue)
-        centroids, clusterPoints, radiusCluster,clusRealLabel,betaCluster = kMeansBeta(mat(sourceFeature),k,betaValue,sourceLabel)
+        centroids, clusterPoints, radiusCluster,betaCluster = kMeansBeta(mat(sourceFeature),k,betaValue,sourceLabel)
 
 
     #put info in model
-    initialModel = clusteringModel(centroids,radiusCluster,clusterPoints,clusRealLabel,betaCluster)
+    initialModel = clusteringModel(centroids,radiusCluster,clusterPoints,betaCluster)
     modelList.append(initialModel)
 
     return modelList,srcTarIndex,eval_sourceLabel
@@ -210,7 +197,7 @@ def NovelCLassDetect(k,q,eval_sourceLabel,targetFeature,targetLabel,modelList,bu
                 if clusterMethod == 'kmeans':
                     outlier = True
                     for modelItem in modelList:
-                      centroids, radiusCluster, realIndexClus,clusRealLabel,betaCluster = modelItem.getModelInfo()
+                      centroids, radiusCluster, realIndexClus,betaCluster = modelItem.getModelInfo()
                       #print "This model item's centroids is: ",centroids
                       k = len(centroids)
                       for j in range(k):
@@ -231,7 +218,7 @@ def NovelCLassDetect(k,q,eval_sourceLabel,targetFeature,targetLabel,modelList,bu
                     outlier = True
 
                     for modelItem in modelList:
-                      centroids, radiusCluster, clusterPoints, clusRealLabel, betaCluster = modelItem.getModelInfo()
+                      centroids, radiusCluster, clusterPoints, betaCluster = modelItem.getModelInfo()
                       k = len(centroids)
                       for j in range(k):
                         #distance = euclDistance(targetFeature[i], centroids[j, :])*betaCluster[j]
@@ -299,7 +286,7 @@ def calcQ_NSC(dataIndex,q,outlierList,targetFeature,modelList):
     minClusID = 0
     minModelIndex = 0
     for modelIndex,modelItem in enumerate(modelList):
-        centroids, radiusCluster, clusterPoints, clusRealLabel, betaCluster = modelItem.getModelInfo()
+        centroids, radiusCluster, clusterPoints, betaCluster = modelItem.getModelInfo()
         K = len(centroids)
         for j in range(K):
             # having beta value, using kmeans beta
@@ -316,7 +303,7 @@ def calcQ_NSC(dataIndex,q,outlierList,targetFeature,modelList):
     #finish compare and find minClusID
     qDistToClu = []
     minModel = modelList[minModelIndex]
-    minCentroids, minRadiusCluster, minClusterPoints,minclusRealLabel,minBetaCluster = minModel.getModelInfo()
+    minCentroids, minRadiusCluster, minClusterPoints,minBetaCluster = minModel.getModelInfo()
 
     pointsInClus = minClusterPoints[minClusID]
     for clusPoint in pointsInClus:
@@ -409,20 +396,20 @@ def modelUpdate(sourceFeature,targetFeature,sourceLabel,targetLabel,srcTarIndex,
         print "Updating with kmeansBeta method"
         gammab = [16.0]
         betaValue = getBeta(newSourceFeature, noNovel_targetFeature, gammab)
-        centroids, clusterPoints, radiusCluster, clusRealLabel, betaCluster = kMeansBeta(mat(newSourceFeature), k, betaValue,newSourceLabel)
+        centroids, clusterPoints, radiusCluster, betaCluster = kMeansBeta(mat(newSourceFeature), k, betaValue,newSourceLabel)
 
 
 
     elif clusterMethod == 'kmeans':
         print "Updating with kmeans method"
-        centroids, realIndexClus, radiusCluster, clusRealLabel = kmeansAlgorithm(mat(sourceFeature), k, sourceLeftIndex,
+        centroids, realIndexClus, radiusCluster = kmeansAlgorithm(mat(sourceFeature), k, sourceLeftIndex,
                                                                   sourceRightIndex)
 
     if len(modelList)>4:
         print "delete oldest model"
         del modelList[0]
 
-    updatedModel = clusteringModel(centroids,radiusCluster,clusterPoints,clusRealLabel,betaCluster)
+    updatedModel = clusteringModel(centroids,radiusCluster,clusterPoints,betaCluster)
     modelList.append(updatedModel)
 
     #predict previous target point
@@ -454,37 +441,7 @@ def modelUpdate(sourceFeature,targetFeature,sourceLabel,targetLabel,srcTarIndex,
 
     return modelList,srcTarIndex,newSourceLabel
 
-# def clusterMerge(modelItem,novel_class_single,threshold,targetFeature):
-#     print "start merge"
-#     centroids, radiusCluster, clusterPoints, betaCluster = modelItem.getModelInfo()
-#     k = len(centroids)
-#     for index,point in enumerate(novel_class_single):
-#         for j in range(k):
-#             similarity = 1 - spatial.distance.cosine(centroids[j, :], targetFeature[point])
-#             if similarity>threshold:
-#                 del novel_class_single[index]
-        #distance = euclDistance(targetFeature[i], centroids[j, :]) * betaCluster[j]
 
-def predict(targetPoint,modelList):
-    minDisToClus = 1000000000.0000
-    minClusID = 0.0
-    minModelIndex = 0.0
-
-    for modelIndex, modelItem in enumerate(modelList):
-      centroids, radiusCluster, clusterPoints, clusRealLabel, betaCluster = modelItem.getModelInfo()
-      k = len(centroids)
-      for j in range(k):
-        curDis = euclDistance(targetPoint, centroids[j, :])
-        if curDis < minDisToClus:
-            minClusID = j
-            minDisToClus = curDis
-            minModelIndex = modelIndex
-
-    minDistModel = modelList[minModelIndex]
-    minCentroids, minRadiusCluster, minClusterPoints, minclusRealLabel, minBetaCluster = minDistModel.getModelInfo()
-    predictLabel = minclusRealLabel[minClusID]
-
-    return predictLabel
 
 def novel_class_evaluation(eval_sourceLabel,targetLabel,srcTarIndex,novel_class_single):
     #from sourceLabel get which classes are the novel class
