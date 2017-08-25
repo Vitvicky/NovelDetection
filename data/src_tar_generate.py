@@ -3,15 +3,13 @@
 from sklearn import svm
 import arff
 import numpy as np
-from py4j.java_gateway import JavaGateway, GatewayParameters, CallbackServerParameters
 import random
-import threading
-import subprocess
 import time
 from random import shuffle
+from ADWIN import *
+
 
 class src_tar_generate(object):
-    PY4JPORT = 25333
 
     def __init__(self, data_name):
         self.data_name = data_name
@@ -23,31 +21,11 @@ class src_tar_generate(object):
         self.global_set = set()
 
         self.read_data()
-        self.gateway = None
-        self.app = None
-        self.__class__.PY4JPORT = random.randint(25333, 30000)
-        t = threading.Thread(target=self.__start_cpd_java)
-        t.daemon = True
-        t.start()
-
-    def init_gateway(self):
-        self.gateway = JavaGateway(start_callback_server=True,
-                                   gateway_parameters=GatewayParameters(port=self.__class__.PY4JPORT),
-                                   callback_server_parameters=CallbackServerParameters(
-                                       port=self.__class__.PY4JPORT + 1))
-
-        self.app = self.gateway.entry_point
 
     def train_svm(self, train_data_feature, train_data_label):
         svm_model = svm.SVC(C=20.0, kernel='rbf', gamma=0.1)
         svm_model.fit(train_data_feature, train_data_label, sample_weight=None)
         return svm_model
-
-    def __start_cpd_java(self):
-        print "start cpd java"
-        subprocess.call(['java', '-jar', 'change_point.jar', str(0.5), str(0.01),
-                     str(5000), str(100), str(0.5),
-                     str(self.__class__.PY4JPORT)])
 
     def read_data(self):
         read_path = '/home/wzy/Coding/Data/' + self.data_name + '/ori/' + self.data_name + '.arff'
@@ -63,44 +41,70 @@ class src_tar_generate(object):
         for i in initial_data:
             initial_data_feature.append(i[:-1])
             initial_data_label.append(i[-1])
-        # print "initial_data_feature: ", initial_data_feature
-        # print "initial_data_label: ", initial_data_label
+
         initial_svm_model = self.train_svm(initial_data_feature, initial_data_label)
 
         return initial_svm_model
 
-    def detect_drift_java(self, sliding_window_error):
+    def detect_drift(self, sliding_window_error):
         change_point = -1
 
-        sw = self.gateway.jvm.java.util.ArrayList()
-        for i in xrange(len(sliding_window_error)):
-            # print "sliding_window_error "+str(i)+" data point "
-            # process = [float(x) for x in sliding_window_error[i]]
-            sw.append(float(sliding_window_error[i]))
-
-        # print "sw: ", sw
-        change_point = self.app.detectSourceChange(sw)
+        # sw = self.gateway.jvm.java.util.ArrayList()
+        # for i in xrange(len(sliding_window_error)):
+        #     # print "sliding_window_error "+str(i)+" data point "
+        #     # process = [float(x) for x in sliding_window_error[i]]
+        #     sw.append(float(sliding_window_error[i]))
+        #
+        # # print "sw: ", sw
+        # change_point = self.app.detectSourceChange(sw)
+        conf = 0.2
+        change_point = detect_change(sliding_window_error, conf)
         return change_point
+
+    def get_novel_class(self, novel_class_1, novel_class_2):
+        novel_class_list1 = []
+        novel_class_list2 = []
+        no_novel_class_list = []
+        print "before novel generate, length of ori data is: ", len(self.original_data)
+        for index in range(0, len(self.original_data)):
+            current_data = self.original_data[index]
+            if current_data[-1] == novel_class_1:
+                novel_class_list1.append(current_data)
+            elif current_data[-1] == novel_class_2:
+                novel_class_list2.append(current_data)
+            else:
+                no_novel_class_list.append(current_data)
+        
+        self.original_data = np.array(no_novel_class_list)
+        novel_class_list1 = np.array(novel_class_list1)
+        novel_class_list2 = np.array(novel_class_list2)
+        print "after novel generate, length of ori data is: ", len(self.original_data)
+        print "the novel class 1 length is: "+str(len(novel_class_list1))+" and novel class 2 length " \
+                                                                          "is: ", len(novel_class_list2)
+
+        return novel_class_list1, novel_class_list2
 
     def detect_point_list(self):
         change_point_list = []
         update_data_feature = []
         update_data_label = []
         max_window_size = 5000
+        novel_class_list1, novel_class_list2 = self.get_novel_class('class6', 'class7')
         len_ori_data = len(self.original_data)
+        print "before point detection, ori data length is: ", len(self.original_data)
         # initial classifier and predict point
         svm_model = self.initial_classifier()
         # data_index = 0
-        for data_index in range(1000, 20000):
+        for data_index in range(1000, 61000):
             print "Current data index: ", data_index
             instance_feature = self.original_data[data_index][:-1]
             instance_label = self.original_data[data_index][-1]
             predict_label = svm_model.predict(instance_feature)
             # print "predict label: "+str(predict_label)+" real label: ", instance_label
             if predict_label == instance_label:
-                predict_score = 1
-            else:
                 predict_score = 0
+            else:
+                predict_score = 1
 
             # print "predict_score: ", predict_score
             if len(self.sliding_window_error) < 2 * self.cusion_size:
@@ -113,13 +117,14 @@ class src_tar_generate(object):
                 self.data_buffer.append(self.original_data[data_index])
                 self.sliding_window_error.append(predict_score)
 
-                change_point = self.detect_drift_java(self.sliding_window_error)
+                change_point = self.detect_drift(self.sliding_window_error)
                 print "change_point :", change_point
                 # find the change point
                 if change_point != -1 and change_point != 0:
                     # add the real change point to collector
                     left_index_window = data_index - len(self.sliding_window_error)
                     real_change_point = left_index_window + change_point
+                    print "current window size is: ", len(self.sliding_window_error)
                     print "\n less than max_window_size, current real change point is: ", real_change_point
                     change_point_list.append(real_change_point)
 
@@ -143,11 +148,6 @@ class src_tar_generate(object):
 
                     svm_model = self.train_svm(update_data_feature, update_data_label)
 
-                    # data_index = real_change_point + self.cusion_size
-
-                # else:
-                #     data_index += 1
-
             # window reach the max size
             else:
                 del self.sliding_window_error[-1]
@@ -155,7 +155,7 @@ class src_tar_generate(object):
                 del self.data_buffer[-1]
                 self.data_buffer.append(self.original_data[data_index])
 
-                change_point = self.detect_drift_java(self.sliding_window_error)
+                change_point = self.detect_drift(self.sliding_window_error)
                 print "change_point :", change_point
                 # detect change point
                 if change_point != -1 and change_point != 0:
@@ -186,7 +186,7 @@ class src_tar_generate(object):
                 #     data_index += 1
 
             print "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-        return change_point_list
+        return change_point_list, novel_class_list1, novel_class_list2
 
     def generate_source_target(self, change_point_list, rate):
         # global_set = set()
@@ -195,31 +195,36 @@ class src_tar_generate(object):
         block = []
         start = 0
         novel_label = -1
-        for i in range(len(change_point_list) - 1):
+        for change_index in range(len(change_point_list) - 1):
             # start to iteration
             if start == 0:
-                block = self.original_data[0:change_point_list[i]]
+                block = self.original_data[0:change_point_list[change_index]]
                 self.global_set = self.summary_label_block(block)
-                print "In index of 0 and "+str(change_point_list[i])+" , the label set is: ", self.global_set
+                print "In index of 0 and "+str(change_point_list[change_index])+" , the label set is: ", self.global_set
                 source_data_list, target_data_list = self.generate_data(start, block, novel_label, rate)
+                print "This block's source, label set is: ", self.summary_label_block(source_data_list)
+                print "This block's target, label set is: ", self.summary_label_block(target_data_list)
                 start = 1
             else:
-                left_index = change_point_list[i]
-                right_index = change_point_list[i+1]
+                left_index = change_point_list[change_index]
+                right_index = change_point_list[change_index+1]
                 block = self.original_data[left_index:right_index]
                 current_set = self.summary_label_block(block)
 
-                print "In index of "+str(change_point_list[i])+" and " +\
-                      str(change_point_list[i]) + " , the label set is: ", current_set
+                print "In index of "+str(change_point_list[change_index])+" and " +\
+                      str(change_point_list[change_index]) + " , the label set is: ", current_set
                 # find the novel class
                 for label in current_set:
                     if label not in self.global_set:
                         novel_label = label
 
                 source_data_block, target_data_block = self.generate_data(start, block, novel_label, rate)
+                print "This block's source, label set is: ", self.summary_label_block(source_data_block)
+                print "This block's target, label set is: ", self.summary_label_block(target_data_block)
                 source_data_list += source_data_block
                 target_data_list += target_data_block
                 self.global_set.add(novel_label)
+                print "========================================================================================"
 
         return source_data_list, target_data_list
 
@@ -265,13 +270,19 @@ class src_tar_generate(object):
 
 
 
-generate = src_tar_generate("fc")
-time.sleep(5)
-# generate.init_gateway()
-# change_point_list = generate.detect_point_list()
-change_point_list = [1199, 1543, 1746, 1957, 2120, 2280, 2480, 2679, 2840, 2994, 3100, 3303, 3475, 3711, 3853, 4071]
-# generate.gateway.shutdown()
-save_change_point = np.array(change_point_list)
+generate = src_tar_generate("Syndata_002")
+# time.sleep(5)
+# change_point_list, novel_class_list1, novel_class_list2 = generate.detect_point_list()
+novel_class_list1, novel_class_list2 = generate.get_novel_class('class6', 'class7')
+change_point_list = [6198,  7532, 8564, 9792, 11000, 12082, 13209, 14340, 15493, 16707,
+                     17921, 19088, 20242, 21478, 22508, 23653, 24924, 26180, 27325, 28494, 29585, 30900, 32079,
+                     33221, 34274, 35520, 36652, 37710, 38918, 40109, 41258, 42371, 43514, 44737, 45864, 47192,
+                     48167, 49309, 50629, 51719, 52714, 54015, 55215, 56309, 57391, 58560, 59712, 61000]
+# save_change_point = np.array(change_point_list)
 # np.savetxt("save_change_point.txt", save_change_point)
-# print change_point_list
-generate.generate_source_target(change_point_list, 0.2)
+
+# change_point_list = np.loadtxt("save_change_point.txt")
+# change_point_list = [int(i) for i in change_point_list]
+print change_point_list
+# generate.generate_source_target(change_point_list, 0.2)
+
